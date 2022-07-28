@@ -58,8 +58,8 @@ comparison = '''
                 and t1.table_name = t2.table_name 
                 and t1.ID = t2.ID 
                 and t1.row_hash <> t2.row_hash 
-                and t2.database_name = 'Opici_LW_Prod'
-            where t1.database_name = 'Opici_LW_Test'
+                and t2.database_name = '''+"'"+client_database+"'"+'''
+            where t1.database_name = '''+"'"+client_database_target+"'"+'''
 '''
 
 cursor.execute(comparison)
@@ -81,7 +81,7 @@ for row in cursor:
                 if row_cursor2['col'] != row_cursor3['col']:
                     if cn not in problematic_columns:
                         problematic_columns.append(cn)
-                        print(cn)
+                        print(row['ID'] + ' ' + cn)
 
 
 print(problematic_columns)
