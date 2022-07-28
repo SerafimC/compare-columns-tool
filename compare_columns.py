@@ -1,7 +1,4 @@
 import pymssql 
-import data_prep as data_proc
-
-sqlite = data_proc.create_connection("./metrics.sqlite")
 
 # ========================== CONNECTION ==========================
 driver = 'ODBC Driver 18 for SQL Server'
