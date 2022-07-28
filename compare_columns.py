@@ -46,7 +46,7 @@ def get_columns_list(c1):
 columns_list = get_columns_list(cursor)
 
 comparison = '''
-            select top 10
+            select top 1000
                 t1.table_schema, 
                 t1.table_name , 
                 t1.ID, 
@@ -64,6 +64,8 @@ comparison = '''
 
 cursor.execute(comparison)
 
+problematic_columns = []
+
 for row in cursor:
 
     for cn in columns_list.split(","):
@@ -77,8 +79,12 @@ for row in cursor:
         for row_cursor2 in cursor2:
             for row_cursor3 in cursor3:
                 if row_cursor2['col'] != row_cursor3['col']:
-                    print(cn)
+                    if cn not in problematic_columns:
+                        problematic_columns.append(cn)
+                        print(cn)
 
+
+print(problematic_columns)
 print(' => done')
 
 conn.close()
