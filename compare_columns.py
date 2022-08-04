@@ -1,49 +1,37 @@
 import pymssql 
+from dotenv import load_dotenv
+from generate_hashes import get_columns_list
+import os
+
+load_dotenv('.env')
 
 # ========================== CONNECTION ==========================
 driver = 'ODBC Driver 18 for SQL Server'
-DB_SERVER='db_server'
-DB_NAME='db_name'
-DB_USER='db_user'
-DB_PASSWORD='db_password'
+DB_SERVER=os.environ.get('DB_SERVER')
+DB_NAME=os.environ.get('DB_NAME')
+DB_USER=os.environ.get('DB_USER')
+DB_PASSWORD=os.environ.get('DB_PASSWORD')
 
 conn = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
 conn2 = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
 conn3 = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
 cursor = conn.cursor(as_dict=True)
-cursor2 = conn2.cursor(as_dict=True)
-cursor3 = conn3.cursor(as_dict=True)
+cursor_test = conn2.cursor(as_dict=True)
+cursor_prod = conn3.cursor(as_dict=True)
 
 # ========================== PARAMETERS ==========================
-client_database = 'Opici_LW_Test'
-client_database_target = 'Opici_LW_Prod'
+client_database_test = 'MaisonSinnae_LW_Test'
+client_database_prod = 'MaisonSinnae_LW_Prod'
 skip_columns = "'SystemModstamp', 'LastViewedDate', 'LastReferencedDate', 'LastModifiedDate', 'LastActivityDate','CreatedDate'"
-schemaname = 'GVP'
-tablename = 'gvp__survey__c'
+schema_name = 'GVP'
+table_name = 'gvp__Item__c'
 commit_window = 100
-
-# =========================== FUNCTIONS ===========================
-def get_columns_list(c1):
-    columns_list = ''
-
-    c1.execute('''select 
-                    distinct column_name
-                from information_schema.columns
-                where table_name = '''+"'"+tablename+"'"+''' and table_schema = '''+"'"+schemaname+"'"+'''
-                and column_name not in ('''+skip_columns+''') order by 1''')
-
-    for row in c1:
-        columns_list += row['column_name'] + ', '
-    
-    columns_list = columns_list[:-2]
-
-    return columns_list
 
 # ========================= COMPARE COLUMNS =========================
 columns_list = get_columns_list(cursor)
 
 comparison = '''
-            select top 1000
+            select top 10
                 t1.table_schema, 
                 t1.table_name , 
                 t1.ID, 
@@ -55,8 +43,8 @@ comparison = '''
                 and t1.table_name = t2.table_name 
                 and t1.ID = t2.ID 
                 and t1.row_hash <> t2.row_hash 
-                and t2.database_name = '''+"'"+client_database+"'"+'''
-            where t1.database_name = '''+"'"+client_database_target+"'"+'''
+                and t2.database_name = '''+"'"+client_database_test+"'"+'''
+            where t1.database_name = '''+"'"+client_database_prod+"'"+'''
 '''
 
 cursor.execute(comparison)
@@ -65,20 +53,20 @@ problematic_columns = []
 
 for row in cursor:
 
-    for cn in columns_list.split(","):
+    for column in columns_list.split(","):
 
-        select1 = "select "+cn+" as col from "+client_database+"."+schemaname+"."+tablename+" where ID = '"+row['ID']+"'"
-        select2 = "select "+cn+" as col from "+client_database_target+"."+schemaname+"."+tablename+" where ID = '"+row['ID']+"'"
+        select1 = "select "+column+" as col from "+client_database_test+"."+schema_name+"."+table_name+" where ID = '"+row['ID']+"'"
+        select2 = "select "+column+" as col from "+client_database_prod+"."+schema_name+"."+table_name+" where ID = '"+row['ID']+"'"
 
-        cursor2.execute(select1)
-        cursor3.execute(select2)
+        cursor_test.execute(select1)
+        cursor_prod.execute(select2)
 
-        for row_cursor2 in cursor2:
-            for row_cursor3 in cursor3:
-                if row_cursor2['col'] != row_cursor3['col']:
-                    if cn not in problematic_columns:
-                        problematic_columns.append(cn)
-                        print(row['ID'] + ' ' + cn)
+        for row_test in cursor_test:
+            for row_prod in cursor_prod:
+                if row_test['col'] != row_prod['col']:
+                    if column not in problematic_columns:
+                        problematic_columns.append(column)
+                        print(row['ID'] + ' ' + column)
 
 
 print(problematic_columns)

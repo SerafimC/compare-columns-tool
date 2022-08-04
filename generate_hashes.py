@@ -1,21 +1,27 @@
 import pymssql 
+from dotenv import load_dotenv
+import os
+
+load_dotenv('.env')
 
 # ========================== CONNECTION ==========================
 driver = 'ODBC Driver 18 for SQL Server'
-DB_SERVER='db_server'
-DB_NAME='db_name'
-DB_USER='db_user'
-DB_PASSWORD='db_password'
+DB_SERVER=os.environ.get('DB_SERVER')
+DB_NAME=os.environ.get('DB_NAME')
+DB_USER=os.environ.get('DB_USER')
+DB_PASSWORD=os.environ.get('DB_PASSWORD')
 
 conn = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
 cursor = conn.cursor(as_dict=True)
 
 # ========================== PARAMETERS ==========================
-client_database = 'Opici_LW_Prod'
+client_database_test = 'MaisonSinnae_LW_Test'
+client_database_prod = 'MaisonSinnae_LW_Prod'
 skip_columns = "'SystemModstamp', 'LastViewedDate', 'LastReferencedDate', 'LastModifiedDate', 'LastActivityDate','CreatedDate'"
-schemaname = 'GVP'
-tablename = 'gvp__survey__c'
+schema_name = 'GVP'
+table_name = 'gvp__Item__c'
 commit_window = 100
+
 
 # =========================== FUNCTIONS ===========================
 def get_columns_list(c1):
@@ -24,7 +30,7 @@ def get_columns_list(c1):
     c1.execute('''select 
                     distinct column_name
                 from information_schema.columns
-                where table_name = '''+"'"+tablename+"'"+''' and table_schema = '''+"'"+schemaname+"'"+'''
+                where table_name = '''+"'"+table_name+"'"+''' and table_schema = '''+"'"+schema_name+"'"+'''
                 and column_name not in ('''+skip_columns+''') order by 1''')
 
     for row in c1:
@@ -34,21 +40,28 @@ def get_columns_list(c1):
 
     return columns_list
 
+def generate_hashes(database):
+    columns_list = get_columns_list(cursor)
+
+    print(' => Deleting previous hashes')
+    cursor.execute("delete from dbo.hash_table where database_name = '"+database+"' and table_schema = '"+schema_name+"' and table_name  ='"+table_name+"'")
+    conn.commit()
+
+    print(' => Generating hashes for '+database+'.'+schema_name+'.'+table_name)
+    hashtable_insert_sql = '''insert into dbo.hash_table
+                    select '''+"'"+database+"'"+''', '''+"'"+schema_name+"'"+''', '''+"'"+table_name+"'"+''', id, cast(BINARY_CHECKSUM('''+columns_list+''') as varchar) + '|' + cast(checksum('''+columns_list+''') as varchar) row_hash 
+                    from '''+database+'''.'''+schema_name+'''.'''+table_name+'''
+    '''
+    cursor.execute(hashtable_insert_sql)
+    conn.commit()
+
+    print(' => Done.')
+
+    
+
 # ========================= GENERATE HASHES =========================
-columns_list = get_columns_list(cursor)
 
-print(' => Deleting previous hashes')
-cursor.execute("delete from dbo.hash_table where database_name = '"+client_database+"' and table_schema = '"+schemaname+"' and table_name  ='"+tablename+"'")
-conn.commit()
-
-print(' => Generating hashes for '+client_database+'.'+schemaname+'.'+tablename)
-insert_command = '''insert into dbo.hash_table
-                select '''+"'"+client_database+"'"+''', '''+"'"+schemaname+"'"+''', '''+"'"+tablename+"'"+''', id, cast(BINARY_CHECKSUM('''+columns_list+''') as varchar) + '|' + cast(checksum('''+columns_list+''') as varchar) row_hash 
-                from '''+client_database+'''.'''+schemaname+'''.'''+tablename+'''
-'''
-cursor.execute(insert_command)
-conn.commit()
-
-print(' => done')
-
-conn.close()
+if __name__ == "__main__":
+    generate_hashes(client_database_test)
+    generate_hashes(client_database_prod)
+    conn.close()
