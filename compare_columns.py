@@ -98,5 +98,3 @@ print(problematic_columns)
 print(' => done')
 
 conn.close()
-conn2.close()
-conn3.close()
