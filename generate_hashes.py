@@ -1,33 +1,37 @@
 import pymssql 
+import json
+
+f = open('config.json')
+config = json.load(f)
+f.close()
 
 # ========================== CONNECTION ==========================
-driver = 'ODBC Driver 18 for SQL Server'
-DB_SERVER='db_server'
-DB_NAME='db_name'
-DB_USER='db_user'
-DB_PASSWORD='db_password'
+CF_DBSERVER = config['DB_SERVER']
+CF_DBNAME = config['DB_NAME']
+CF_DBUSER = config['DB_USER']
+CF_DBPASSWORD = config['DB_PASSWORD']
 
-conn = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
+conn = pymssql.connect(CF_DBSERVER, CF_DBUSER, CF_DBPASSWORD, CF_DBNAME)
 cursor = conn.cursor(as_dict=True)
 
 # ========================== PARAMETERS ==========================
-client_database = 'Opici_LW_Prod'
-skip_columns = "'SystemModstamp', 'LastViewedDate', 'LastReferencedDate', 'LastModifiedDate', 'LastActivityDate','CreatedDate'"
-schemaname = 'GVP'
-tablename = 'gvp__survey__c'
-commit_window = 100
+CF_DATABASE = config['client_database']
+CF_DATABASE_TARGET = config['client_database_to_compare']
+CF_SKPCOLS = config['skip_columns']
+CF_SCHEMA = config['schemaname']
+CF_TABLENAME = config['tablename']
 
 # =========================== FUNCTIONS ===========================
-def get_columns_list(c1):
+def get_columns_list(con_cursor):
     columns_list = ''
 
-    c1.execute('''select 
+    con_cursor.execute('''select 
                     distinct column_name
                 from information_schema.columns
-                where table_name = '''+"'"+tablename+"'"+''' and table_schema = '''+"'"+schemaname+"'"+'''
-                and column_name not in ('''+skip_columns+''') order by 1''')
+                where table_name = '''+"'"+CF_TABLENAME+"'"+''' and table_schema = '''+"'"+CF_SCHEMA+"'"+'''
+                and column_name not in ('''+CF_SKPCOLS+''') order by 1''')
 
-    for row in c1:
+    for row in con_cursor:
         columns_list += row['column_name'] + ', '
     
     columns_list = columns_list[:-2]
@@ -35,20 +39,24 @@ def get_columns_list(c1):
     return columns_list
 
 # ========================= GENERATE HASHES =========================
-columns_list = get_columns_list(cursor)
+def generate_hashes(client_db):
+    columns_list = get_columns_list(cursor)
 
-print(' => Deleting previous hashes')
-cursor.execute("delete from dbo.hash_table where database_name = '"+client_database+"' and table_schema = '"+schemaname+"' and table_name  ='"+tablename+"'")
-conn.commit()
+    print(' => Deleting previous hashes')
+    cursor.execute("delete from dbo.hash_table where database_name = '"+client_db+"' and table_schema = '"+CF_SCHEMA+"' and table_name  ='"+CF_TABLENAME+"'")
+    conn.commit()
 
-print(' => Generating hashes for '+client_database+'.'+schemaname+'.'+tablename)
-insert_command = '''insert into dbo.hash_table
-                select '''+"'"+client_database+"'"+''', '''+"'"+schemaname+"'"+''', '''+"'"+tablename+"'"+''', id, cast(BINARY_CHECKSUM('''+columns_list+''') as varchar) + '|' + cast(checksum('''+columns_list+''') as varchar) row_hash 
-                from '''+client_database+'''.'''+schemaname+'''.'''+tablename+'''
-'''
-cursor.execute(insert_command)
-conn.commit()
+    print(' => Generating hashes for '+client_db+'.'+CF_SCHEMA+'.'+CF_TABLENAME)
+    insert_command = '''insert into dbo.hash_table
+                    select '''+"'"+client_db+"'"+''', '''+"'"+CF_SCHEMA+"'"+''', '''+"'"+CF_TABLENAME+"'"+''', id, cast(BINARY_CHECKSUM('''+columns_list+''') as varchar) + '|' + cast(checksum('''+columns_list+''') as varchar) row_hash 
+                    from '''+client_db+'''.'''+CF_SCHEMA+'''.'''+CF_TABLENAME+'''
+    '''
+    cursor.execute(insert_command)
+    conn.commit()
 
-print(' => done')
+    print(' => done')
+
+generate_hashes(CF_DATABASE)
+generate_hashes(CF_DATABASE_TARGET)
 
 conn.close()

@@ -1,26 +1,25 @@
 import pymssql 
+import json
+
+f = open('config.json')
+config = json.load(f)
+f.close()
 
 # ========================== CONNECTION ==========================
-driver = 'ODBC Driver 18 for SQL Server'
-DB_SERVER='db_server'
-DB_NAME='db_name'
-DB_USER='db_user'
-DB_PASSWORD='db_password'
+CF_DBSERVER = config['DB_SERVER']
+CF_DBNAME = config['DB_NAME']
+CF_DBUSER = config['DB_USER']
+CF_DBPASSWORD = config['DB_PASSWORD']
 
-conn = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
-conn2 = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
-conn3 = pymssql.connect(DB_SERVER, DB_USER, DB_PASSWORD, DB_NAME)
+conn = pymssql.connect(CF_DBSERVER, CF_DBUSER, CF_DBPASSWORD, CF_DBNAME)
 cursor = conn.cursor(as_dict=True)
-cursor2 = conn2.cursor(as_dict=True)
-cursor3 = conn3.cursor(as_dict=True)
 
 # ========================== PARAMETERS ==========================
-client_database = 'Opici_LW_Test'
-client_database_target = 'Opici_LW_Prod'
-skip_columns = "'SystemModstamp', 'LastViewedDate', 'LastReferencedDate', 'LastModifiedDate', 'LastActivityDate','CreatedDate'"
-schemaname = 'GVP'
-tablename = 'gvp__survey__c'
-commit_window = 100
+CF_DATABASE = config['client_database']
+CF_DATABASE_TARGET = config['client_database_to_compare']
+CF_SKPCOLS = config['skip_columns']
+CF_SCHEMA = config['schemaname']
+CF_TABLENAME = config['tablename']
 
 # =========================== FUNCTIONS ===========================
 def get_columns_list(c1):
@@ -29,8 +28,8 @@ def get_columns_list(c1):
     c1.execute('''select 
                     distinct column_name
                 from information_schema.columns
-                where table_name = '''+"'"+tablename+"'"+''' and table_schema = '''+"'"+schemaname+"'"+'''
-                and column_name not in ('''+skip_columns+''') order by 1''')
+                where table_name = '''+"'"+CF_TABLENAME+"'"+''' and table_schema = '''+"'"+CF_SCHEMA+"'"+'''
+                and column_name not in ('''+CF_SKPCOLS+''') order by 1''')
 
     for row in c1:
         columns_list += row['column_name'] + ', '
@@ -39,11 +38,12 @@ def get_columns_list(c1):
 
     return columns_list
 
-# ========================= COMPARE COLUMNS =========================
+# ========================= COMPARE HASHES =========================
 columns_list = get_columns_list(cursor)
 
-comparison = '''
-            select top 1000
+print(' => Comparing hashes')
+hashes_query = '''
+            select top 1
                 t1.table_schema, 
                 t1.table_name , 
                 t1.ID, 
@@ -55,32 +55,45 @@ comparison = '''
                 and t1.table_name = t2.table_name 
                 and t1.ID = t2.ID 
                 and t1.row_hash <> t2.row_hash 
-                and t2.database_name = '''+"'"+client_database+"'"+'''
-            where t1.database_name = '''+"'"+client_database_target+"'"+'''
+                and t2.database_name = '''+"'"+CF_DATABASE+"'"+'''
+            where t1.database_name = '''+"'"+CF_DATABASE_TARGET+"'"+'''
 '''
 
-cursor.execute(comparison)
+cursor.execute(hashes_query)
+
+# ========================= IDs TO COMPARE =========================
+print(' => Getting IDs to comapre columns')
+ids_to_check = ''
+for row in cursor:
+
+    ids_to_check += "'"+ row['ID'] + "',"
+
+ids_to_check = ids_to_check[:-1]
 
 problematic_columns = []
 
+compare_query = 'select '
+
+# ========================= COMPARE COLUMNS =========================
+print(' => Comparing columns')
+for col_name in columns_list.split(','):
+    compare_query += 't1.'+col_name.strip() +' as '+ col_name.strip() + 'c1,' + 't2.'+col_name.strip() + ' as ' + col_name.strip() + 'c2,'
+
+compare_query = compare_query[:-1]
+compare_query += " from "+CF_DATABASE+"."+CF_SCHEMA+"."+CF_TABLENAME+" t1 "
+compare_query += " inner join "+CF_DATABASE_TARGET+"."+CF_SCHEMA+"."+CF_TABLENAME+" t2 "
+compare_query += " on t1.ID = t2.ID "
+compare_query += " and t1.ID in (" + ids_to_check + ")"
+
+cursor.execute(compare_query)
+
 for row in cursor:
 
-    for cn in columns_list.split(","):
+    for col_name in columns_list.split(','):
+        if row[col_name.strip()+'c1'] != row[col_name.strip()+'c2']:
+            problematic_columns.append(col_name.strip())
 
-        select1 = "select "+cn+" as col from "+client_database+"."+schemaname+"."+tablename+" where ID = '"+row['ID']+"'"
-        select2 = "select "+cn+" as col from "+client_database_target+"."+schemaname+"."+tablename+" where ID = '"+row['ID']+"'"
-
-        cursor2.execute(select1)
-        cursor3.execute(select2)
-
-        for row_cursor2 in cursor2:
-            for row_cursor3 in cursor3:
-                if row_cursor2['col'] != row_cursor3['col']:
-                    if cn not in problematic_columns:
-                        problematic_columns.append(cn)
-                        print(row['ID'] + ' ' + cn)
-
-
+print(' => Columns to check:')
 print(problematic_columns)
 print(' => done')
 
