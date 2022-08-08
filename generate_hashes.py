@@ -54,10 +54,6 @@ def generate_hashes(database):
     cursor.execute(hashtable_insert_sql)
     conn.commit()
 
-    print(' => Done.')
-
-    
-
 # ========================= GENERATE HASHES =========================
 def generate_hashes(client_db):
     columns_list = get_columns_list(cursor)

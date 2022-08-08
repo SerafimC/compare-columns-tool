@@ -62,7 +62,7 @@ hashes_query = '''
 cursor.execute(hashes_query)
 
 # ========================= IDs TO COMPARE =========================
-print(' => Getting IDs to comapre columns')
+print(' => Getting IDs to compare columns')
 ids_to_check = ''
 for row in cursor:
 
