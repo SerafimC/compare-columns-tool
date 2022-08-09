@@ -76,7 +76,6 @@ def compare_columns(schemaname, tablename, ids_list):
                 if col_name.strip() not in problematic_columns:
                     problematic_columns.append(col_name.strip())
 
-    write_to_log(' ==============')
     write_to_log(CF_DATABASE+' - '+schemaname+'.'+tablename)
     print(' => Columns to check: - '+schemaname+'.'+tablename)
     print(problematic_columns)
