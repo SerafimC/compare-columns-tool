@@ -15,9 +15,9 @@ def get_columns_list(cursor, tablename, schema, skip_columns):
                 order by 1''')
 
     for row in cursor:
-        columns_list += row['column_name'] + ', '
+        columns_list += row['column_name'] + ','
     
-    columns_list = columns_list[:-2]
+    columns_list = columns_list[:-1]
 
     return columns_list
 
@@ -36,3 +36,19 @@ def get_tables_list(cursor, schemalist):
         tablelist.append({"schemaname" : row['table_schema'], "tablename" : row['table_name']})
 
     return tablelist
+
+def get_full_columns_list(cursor, tablename, schema):
+    columns_list = ''
+
+    cursor.execute('''select 
+                    distinct c.column_name
+                from information_schema.columns c
+                where c.table_name = '''+"'"+tablename+"'"+''' and c.table_schema = '''+"'"+schema+"'"+'''
+                order by 1''')
+
+    for row in cursor:
+        columns_list += row['column_name'] + ','
+    
+    columns_list = columns_list[:-1]
+
+    return columns_list

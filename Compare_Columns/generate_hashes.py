@@ -18,10 +18,21 @@ def generate_hashes(client_db, schemaname, tablename):
     # cursor.execute("delete from dbo.hash_table where database_name = '"+client_db+"' and table_schema = '"+schemaname+"' and table_name  ='"+tablename+"'")
     # conn.commit()
 
+    isDeletedColumn = 'IsDeleted' if 'IsDeleted' in get_full_columns_list(cursor, tablename, schemaname).split(',') else "'false'"
+    LastModifiedDateColumn = 'LastModifiedDate' if 'LastModifiedDate' in get_full_columns_list(cursor, tablename, schemaname).split(',') else "'1900-01-01'"
+
     print(' => Generating hashes for '+client_db+'.'+schemaname+'.'+tablename)
     insert_command = '''insert into dbo.hash_table
-                    select '''+"'"+client_db+"'"+''', '''+"'"+schemaname+"'"+''', '''+"'"+tablename+"'"+''', id, cast(BINARY_CHECKSUM('''+columns_list+''') as varchar) + '|' + cast(checksum('''+columns_list+''') as varchar) row_hash 
+                    select top 100
+                        '''+"'"+client_db+"'"+''', 
+                        '''+"'"+schemaname+"'"+''', 
+                        '''+"'"+tablename+"'"+''', 
+                        id, 
+                        cast(BINARY_CHECKSUM('''+columns_list+''') as varchar) + '|' + cast(checksum('''+columns_list+''') as varchar) row_hash,
+                        '''+isDeletedColumn+''' as isDeleted
                     from '''+client_db+'''.'''+schemaname+'''.'''+tablename+'''
+                    where '''+LastModifiedDateColumn+''' < DATEADD(day, -2, cast(getdate() as date))
+                    order by id desc
     '''
     cursor.execute(insert_command)
     conn.commit()

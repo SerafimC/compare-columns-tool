@@ -1,7 +1,7 @@
 import pymssql 
 from load_config import *
 from common_functions import *
-from compare_log import write_to_log
+from log_module import write_to_log
 
 # ========================== CONNECTION ==========================
 conn = pymssql.connect(CF_DBSERVER, CF_DBUSER, CF_DBPASSWORD, CF_DBNAME)
@@ -29,9 +29,11 @@ def compare_hashes(schemaname, tablename):
                     and t1.ID = t2.ID 
                     and t1.row_hash <> t2.row_hash 
                     and t2.database_name = '''+"'"+CF_DATABASE+"'"+'''
+                    and t2.isDeleted = 'false'
                 where t1.database_name = '''+"'"+CF_DATABASE_TARGET+"'"+'''
                 and t1.table_schema = '''+"'"+schemaname+"'"+'''
                 and t1.table_name = '''+"'"+tablename+"'"+'''
+                and t1.isDeleted = 'false'
     '''
 
     cursor.execute(hashes_query)
@@ -57,7 +59,7 @@ def compare_columns(schemaname, tablename, ids_list):
     problematic_columns = []
     
     print(' => Comparing columns -',schemaname,'.',tablename)
-    compare_query = 'select '
+    compare_query = 'select t1.id,'
     for col_name in columns_list.split(','):
         compare_query += 't1.'+col_name.strip() +' as '+ col_name.strip() + 'c1,' + 't2.'+col_name.strip() + ' as ' + col_name.strip() + 'c2,'
 
@@ -73,12 +75,12 @@ def compare_columns(schemaname, tablename, ids_list):
 
         for col_name in columns_list.split(','):
             if row[col_name.strip()+'c1'] != row[col_name.strip()+'c2']:
-                if col_name.strip() not in problematic_columns:
-                    problematic_columns.append(col_name.strip())
+                if col_name.strip() not in [item['column'] for item in problematic_columns]:
+                    problematic_columns.append({"column":col_name.strip(), "example":row['id']})
 
     write_to_log(CF_DATABASE+' - '+schemaname+'.'+tablename)
     print(' => Columns to check: - '+schemaname+'.'+tablename)
-    print(problematic_columns)
+    print(*problematic_columns, sep='\n')
     write_to_log(problematic_columns)
     write_to_log(' ==============')
     print(' => done')
@@ -102,5 +104,6 @@ elif CF_MODE == 'single':
             print("No ID to be compared -",CF_SCHEMA,'.',CF_TABLENAME)
     else:
         compare_columns(CF_SCHEMA, CF_TABLENAME, ids_to_check)
+        # print(ids_to_check.split(',')[:4])
 
 conn.close()
