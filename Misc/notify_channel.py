@@ -4,7 +4,7 @@ import random
 import requests
 
 def notify_slack(message, title, color):
-    url = "https://hooks.slack.com/services/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"
+    url = ""
     message = (message)
     title = (title)
     slack_data = {
