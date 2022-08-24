@@ -19,8 +19,8 @@ def insert_metric(conn, databasename, schemaname, tablename, rowcount):
 
     cur = conn.cursor()
     command = "insert into Metrics values('"+databasename+"','"+schemaname+"','"+tablename+"',"+rowcount+");"
-    print(command)
     cur.execute(command,)
+    print(command)
 
     return 
 
@@ -46,6 +46,30 @@ def select_tables(conn):
         tables_list.append([row[0], row[1]])
 
     return tables_list
+
+def compare_metrics(conn, client_database, client_database_tg):
+
+    cur = conn.cursor()
+    cur.execute('''
+            select 
+                n.schema_name, n.table_name, 
+                '''+"'"+client_database_tg[-4:]+"'"+''', m.rowcount, 
+                '''+"'"+client_database[-4:]+"'"+''', n.rowcount,
+                cast(round(abs(1 - (cast(m.rowcount as double) / cast(n.rowcount as double))) * 100, 2) as varchar(5)) || '%' as difference_perc
+            from Metrics m 
+            join Metrics n
+                on n.schema_name = m.schema_name 
+                and n.table_name = m.table_name 
+                and n.rowcount <> m.rowcount 
+                and n.database_name = '''+"'"+client_database+"'"+'''
+            where m.database_name = '''+"'"+client_database_tg+"'"+'''
+            and m.schema_name = 'GVP'
+            order by 7, 1, 2
+    ''',)
+
+    rows = cur.fetchall()
+
+    return rows
         
 def main():
     database = "./metrics.sqlite"
@@ -57,4 +81,4 @@ def main():
 
     return 0
 
-main()
+# main()

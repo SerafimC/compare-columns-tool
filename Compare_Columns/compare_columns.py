@@ -1,16 +1,8 @@
-import pymssql 
-from load_config import *
-from common_functions import *
-from log_module import write_to_log
-
-# ========================== CONNECTION ==========================
-conn = pymssql.connect(CF_DBSERVER, CF_DBUSER, CF_DBPASSWORD, CF_DBNAME)
-cursor = conn.cursor(as_dict=True)
 
 # ========================= FUNCTIONS =========================
-def compare_hashes(schemaname, tablename):
+def compare_hashes(cursor, schemaname, tablename, config, common_functions):
     try:
-        columns_list = get_columns_list(cursor, tablename, schemaname, CF_SKPCOLS)
+        columns_list = common_functions.get_columns_list(cursor, tablename, schemaname, config.CF_SKPCOLS)
     except:
         raise Exception("Failed to get the columns list for",schemaname,'.',tablename )
 
@@ -28,9 +20,9 @@ def compare_hashes(schemaname, tablename):
                     and t1.table_name = t2.table_name 
                     and t1.ID = t2.ID 
                     and t1.row_hash <> t2.row_hash 
-                    and t2.database_name = '''+"'"+CF_DATABASE+"'"+'''
+                    and t2.database_name = '''+"'"+config.CF_DATABASE+"'"+'''
                     and t2.isDeleted = 'false'
-                where t1.database_name = '''+"'"+CF_DATABASE_TARGET+"'"+'''
+                where t1.database_name = '''+"'"+config.CF_DATABASE_TARGET+"'"+'''
                 and t1.table_schema = '''+"'"+schemaname+"'"+'''
                 and t1.table_name = '''+"'"+tablename+"'"+'''
                 and t1.isDeleted = 'false'
@@ -49,10 +41,10 @@ def compare_hashes(schemaname, tablename):
 
     return ids_to_check
 
-def compare_columns(schemaname, tablename, ids_list):
+def compare_columns(cursor, schemaname, tablename, ids_list, config, common_functions, log):
 
     try:
-        columns_list = get_columns_list(cursor, tablename, schemaname, CF_SKPCOLS)
+        columns_list = common_functions.get_columns_list(cursor, tablename, schemaname, config.CF_SKPCOLS)
     except:
         raise Exception("Failed to get the columns list for",schemaname,'.',tablename )
 
@@ -64,8 +56,8 @@ def compare_columns(schemaname, tablename, ids_list):
         compare_query += 't1.'+col_name.strip() +' as '+ col_name.strip() + 'c1,' + 't2.'+col_name.strip() + ' as ' + col_name.strip() + 'c2,'
 
     compare_query = compare_query[:-1]
-    compare_query += " from "+CF_DATABASE+"."+schemaname+"."+tablename+" t1 "
-    compare_query += " inner join "+CF_DATABASE_TARGET+"."+schemaname+"."+tablename+" t2 "
+    compare_query += " from "+config.CF_DATABASE+"."+schemaname+"."+tablename+" t1 "
+    compare_query += " inner join "+config.CF_DATABASE_TARGET+"."+schemaname+"."+tablename+" t2 "
     compare_query += " on t1.ID = t2.ID "
     compare_query += " and t1.ID in (" + ids_list + ")"
 
@@ -78,32 +70,30 @@ def compare_columns(schemaname, tablename, ids_list):
                 if col_name.strip() not in [item['column'] for item in problematic_columns]:
                     problematic_columns.append({"column":col_name.strip(), "example":row['id']})
 
-    write_to_log(CF_DATABASE+' - '+schemaname+'.'+tablename)
+    log.write_to_log(config.CF_DATABASE+' - '+schemaname+'.'+tablename)
     print(' => Columns to check: - '+schemaname+'.'+tablename)
     print(*problematic_columns, sep='\n')
-    write_to_log(problematic_columns)
-    write_to_log(' ==============')
+    log.write_to_log(problematic_columns)
+    log.write_to_log(' ==============')
     print(' => done')
 
 # ========================= EXECUTION =========================
-print('Running',CF_MODE,'mode')
+def run(conn, cursor, config, common_functions, log):
+    print('Running',config.CF_MODE,'mode')
 
-if CF_MODE == 'full':
-    tableslist = get_tables_list(cursor, CF_SCHEMALIST)
+    if config.CF_MODE == 'full':
+        tableslist = common_functions.get_tables_list(cursor, config.CF_SCHEMALIST)
 
-    for item in tableslist:
-        ids_to_check = compare_hashes(item['schemaname'], item['tablename'])
+        for item in tableslist:
+            ids_to_check = compare_hashes(cursor, item['schemaname'], item['tablename'], config, common_functions)
+            if ids_to_check == '':
+                print("No ID to be compared -",item['schemaname'],'.',item['tablename'] )
+                continue
+            compare_columns(cursor, item['schemaname'], item['tablename'], ids_to_check, config, common_functions, log)
+
+    elif config.CF_MODE == 'single':
+        ids_to_check = compare_hashes(cursor, config.CF_SCHEMA, config.CF_TABLENAME, config, common_functions)
         if ids_to_check == '':
-            print("No ID to be compared -",item['schemaname'],'.',item['tablename'] )
-            continue
-        compare_columns(item['schemaname'], item['tablename'], ids_to_check)
-
-elif CF_MODE == 'single':
-    ids_to_check = compare_hashes(CF_SCHEMA, CF_TABLENAME)
-    if ids_to_check == '':
-            print("No ID to be compared -",CF_SCHEMA,'.',CF_TABLENAME)
-    else:
-        compare_columns(CF_SCHEMA, CF_TABLENAME, ids_to_check)
-        # print(ids_to_check.split(',')[:4])
-
-conn.close()
+                print("No ID to be compared -", config.CF_SCHEMA,'.', config.CF_TABLENAME)
+        else:
+            compare_columns(cursor, config.CF_SCHEMA, config.CF_TABLENAME, ids_to_check, config, common_functions, log)

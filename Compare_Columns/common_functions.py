@@ -28,7 +28,7 @@ def get_tables_list(cursor, schemalist):
                         from information_schema.columns
                         where table_schema in ('''+schemalist+''')
                         and lower(column_name) in ('id') 
-                        and lower(table_name) not in ('user', 'productdimview')
+                        and lower(table_name) not in ('user', 'productdimview', 'gvp__execution_assignment__c')
                         and lower(table_name) not like 'vw%'
                         order by 1, 2 ''')
 

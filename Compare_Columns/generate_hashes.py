@@ -1,16 +1,9 @@
-import pymssql 
-from load_config import *
-from common_functions import *
-
-# ========================== CONNECTION ==========================
-conn = pymssql.connect(CF_DBSERVER, CF_DBUSER, CF_DBPASSWORD, CF_DBNAME)
-cursor = conn.cursor(as_dict=True)
 
 # ========================= GENERATE HASHES =========================
-def generate_hashes(client_db, schemaname, tablename):
+def generate_hashes(conn, cursor, client_db, schemaname, tablename, skip_columns, common_functions):
 
     try:
-        columns_list = get_columns_list(cursor, tablename, schemaname, CF_SKPCOLS)
+        columns_list = common_functions.get_columns_list(cursor, tablename, schemaname, skip_columns)
     except:
         raise Exception("Failed to get the columns list.")
 
@@ -18,8 +11,8 @@ def generate_hashes(client_db, schemaname, tablename):
     # cursor.execute("delete from dbo.hash_table where database_name = '"+client_db+"' and table_schema = '"+schemaname+"' and table_name  ='"+tablename+"'")
     # conn.commit()
 
-    isDeletedColumn = 'IsDeleted' if 'IsDeleted' in get_full_columns_list(cursor, tablename, schemaname).split(',') else "'false'"
-    LastModifiedDateColumn = 'LastModifiedDate' if 'LastModifiedDate' in get_full_columns_list(cursor, tablename, schemaname).split(',') else "'1900-01-01'"
+    isDeletedColumn = 'IsDeleted' if 'IsDeleted' in common_functions.get_full_columns_list(cursor, tablename, schemaname).split(',') else "'false'"
+    LastModifiedDateColumn = 'LastModifiedDate' if 'LastModifiedDate' in common_functions.get_full_columns_list(cursor, tablename, schemaname).split(',') else "'1900-01-01'"
 
     print(' => Generating hashes for '+client_db+'.'+schemaname+'.'+tablename)
     insert_command = '''insert into dbo.hash_table
@@ -37,22 +30,23 @@ def generate_hashes(client_db, schemaname, tablename):
     cursor.execute(insert_command)
     conn.commit()
 
-print('Running',CF_MODE,'mode')
+def run(conn, cursor, config, common_functions):
+    print('Running',config.CF_MODE,'mode')
 
-print(' => Truncating hash table')
-cursor.execute("truncate table dbo.hash_table;")
-conn.commit()
+    print(' => Truncating hash table')
+    cursor.execute("truncate table dbo.hash_table;")
+    conn.commit()
 
-if CF_MODE == 'full':
-    tableslist = get_tables_list(cursor, CF_SCHEMALIST)
+    if config.CF_MODE == 'full':
+        tableslist = common_functions.get_tables_list(cursor, config.CF_SCHEMALIST)
 
-    for item in tableslist:
-        generate_hashes(CF_DATABASE, item['schemaname'], item['tablename'])
-        generate_hashes(CF_DATABASE_TARGET, item['schemaname'], item['tablename'])
+        for item in tableslist:
+            generate_hashes(conn, cursor, config.CF_DATABASE, item['schemaname'], item['tablename'], config.CF_SKPCOLS, common_functions)
+            generate_hashes(conn, cursor,config.CF_DATABASE_TARGET, item['schemaname'], item['tablename'], config.CF_SKPCOLS, common_functions)
 
-elif CF_MODE == 'single':
-    generate_hashes(CF_DATABASE, CF_SCHEMA, CF_TABLENAME)
-    generate_hashes(CF_DATABASE_TARGET, CF_SCHEMA, CF_TABLENAME)
+    elif config.CF_MODE == 'single':
+        generate_hashes(conn, cursor, config.CF_DATABASE, config.CF_SCHEMA, config.CF_TABLENAME, config.CF_SKPCOLS, common_functions)
+        generate_hashes(conn, cursor, config.CF_DATABASE_TARGET, config.CF_SCHEMA, config.CF_TABLENAME, config.CF_SKPCOLS, common_functions)
 
-print(' => done')
-conn.close()
+    print(' => done')
+
