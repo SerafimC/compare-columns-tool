@@ -10,6 +10,7 @@ def get_columns_list(cursor, tablename, schema, skip_columns):
                     and c.column_name = pks.column_name 
                 where c.table_name = '''+"'"+tablename+"'"+''' and c.table_schema = '''+"'"+schema+"'"+'''
                 and c.column_name not in ('''+skip_columns+''') 
+                and lower(c.column_name) not in ('current', 'group', 'lcases', '9lcases', 'key', 'order') 
                 and data_type not in ('ntext', 'datetime', 'date')
                 and (pks.column_name is null or pks.column_name = 'id')
                 order by 1''')

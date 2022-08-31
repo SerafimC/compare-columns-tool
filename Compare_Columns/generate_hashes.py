@@ -25,6 +25,7 @@ def generate_hashes(conn, cursor, client_db, schemaname, tablename, skip_columns
                         '''+isDeletedColumn+''' as isDeleted
                     from '''+client_db+'''.'''+schemaname+'''.'''+tablename+'''
                     where '''+LastModifiedDateColumn+''' < DATEADD(day, -2, cast(getdate() as date))
+                    and id is not null
                     order by id desc
     '''
     cursor.execute(insert_command)

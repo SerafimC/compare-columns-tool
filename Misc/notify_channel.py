@@ -4,7 +4,7 @@ import random
 import requests
 
 def notify_slack(message, title, color):
-    url = ""
+    url = "https://hooks.slack.com/services/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"
     message = (message)
     title = (title)
     slack_data = {
@@ -44,7 +44,7 @@ def format_metric(list):
 
         final_message += row + "\n"
     if not list:
-        final_message += 'No difference found.'
+        final_message += 'No difference was found.'
     final_message += "```"
 
     return final_message

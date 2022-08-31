@@ -3,3 +3,5 @@ __pycache__/
 .env
 Compare_Columns/config.json
 Compare_Columns/compare.log
+*.log
+*.json

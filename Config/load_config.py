@@ -1,9 +1,9 @@
 import json
 
 # f = open('./Config/config.json')
-f = open('./Config/config_jaeger.json')
+# f = open('./Config/config_jaeger.json')
 # f = open('./Config/config_european.json')
-# f = open('./Config/config_maison.json')
+f = open('./Config/config_maison.json')
 config = json.load(f)
 f.close()
 
